@@ -10,7 +10,7 @@ try:
     from flask_cors import CORS
     from flask_wtf.csrf import CSRFProtect
     from flask_httpauth import HTTPBasicAuth
-    from flask_login import LoginManager, UserMixin, current_user, login_required, login_user
+    from flask_login import UserMixin, current_user, login_required, login_user
     from flask import Flask, render_template, abort, make_response, request, redirect, jsonify, send_from_directory
     from utilgeo import UtilGeo
 
@@ -26,30 +26,19 @@ FORMAT = '%(asctime)s %(levelname)s : %(message)s'
 root = logging.getLogger()
 root.setLevel(logging.INFO)
 formatter = logging.Formatter(FORMAT)
-# Log en pantalla
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
 handler.setFormatter(formatter)
-#fh = logging.FileHandler('logger.log')
-#fh.setLevel(logging.INFO)
-#fh.setFormatter(formatter)
-# se meten ambas configuraciones
 root.addHandler(handler)
-#root.addHandler(fh)
-
 logger = logging.getLogger('HTTP')
 # ===============================================================================
 # Configuraciones generales del servidor Web
 # ===============================================================================
 
-
 SECRET_CSRF = os.environ.get('SECRET_KEY_CSRF','KEY-CSRF-ACA-DEBE-IR')
-
 app = Flask(__name__)
+app.config['DEBUG'] = False 
 app.config.update( DEBUG=False, SECRET_KEY = str(SECRET_CSRF), )
-
-#login_manager = LoginManager()
-#login_manager.init_app(app)
 
 csrf = CSRFProtect()
 csrf.init_app(app)
@@ -62,34 +51,27 @@ cors = CORS(app, resources={r"/geo/*": {"origins": ["dev.jonnattan.com"]}})
 ROOT_DIR = os.path.dirname(__file__)
 
 #===============================================================================
-# Redirige
+# Servicios basicos
 #===============================================================================
 @app.route('/', methods=['GET', 'POST'])
 @csrf.exempt
 def index():
     logging.info("Reciv solicitude endpoint: /" )
-    return redirect('/infojonna'), 302
+    return redirect('/info'), 302
 
-#===============================================================================
-# Redirige
-#===============================================================================
 @app.route('/<path:subpath>', methods=('GET', 'POST'))
 @csrf.exempt
 def processOtherContext( subpath ):
     logging.info("Reciv solicitude endpoint: " + subpath )
-    return redirect('/infojonna'), 302
+    return redirect('/info'), 302
 
-#===============================================================================
-# Redirige a mi blog personal
-#===============================================================================
-@app.route('/infojonna', methods=['GET', 'POST'])
+@app.route('/info', methods=['GET', 'POST'])
 @csrf.exempt
 def infoJonnaProccess():
     logging.info("Reciv solicitude endpoint: /infojonna" )
     return jsonify({
-        "Servidor": "dev.jonnattan.com",
-        "Nombre": "Jonnattan Griffiths Catalan",
-        "Linkedin":"https://www.linkedin.com/in/jonnattan/"
+        "Name": "Geo API",
+        "Description": "API de servicios para trabajos con"
     })
 #===============================================================================
 # Metodo solicitado por la biblioteca de autenticaci'on b'asica
@@ -98,9 +80,9 @@ def infoJonnaProccess():
 def verify_password(username, password):
     user = None
     if username != None :
-        basicAuth = Security()
-        user =  basicAuth.verifiyUserPass(username, password)
-        del basicAuth
+        pswd = os.environ.get('PASS_USER_REQUEST','NO_INFO')
+        if str(password) == str(pswd) : 
+            user = username
     return user
 
 #===============================================================================
@@ -113,7 +95,7 @@ def unauthorized():
 # ==============================================================================
 # Procesa solicitudes desde pagina web
 # ==============================================================================
-@app.route('/geo/<path:subpath>', methods=['GET','POST'])
+@app.post('/geo/<path:subpath>')
 @csrf.exempt
 @auth.login_required
 def process_page( subpath ):
@@ -128,7 +110,6 @@ def process_page( subpath ):
 if __name__ == "__main__":
     listenPort = 8085
     logger.info("ROOT_DIR: " + ROOT_DIR)
-    logger.info("ROOT_DIR: " + app.root_path)
     if(len(sys.argv) == 1):
         logger.error("Se requiere el puerto como parametro")
         exit(0)
