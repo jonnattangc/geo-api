@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+    geo-server:
+      container_name: geo-server
+      image: geo-server:1.0
+      restart: always
+      volumes:
+        - ./app:/home/jonnattan/app
+      ports:
+        - "8075:8075"
+      env_file:
+        - ../file.env
+      networks:
+        - db-net
+networks:
+  db-net:
