@@ -2,13 +2,13 @@ version: '3.9'
 services:
     geo-server-dev:
       container_name: geo-server-dev
-      image: geo-server:develop
+      image: geoserver:dev
       volumes:
         - ./app:/home/jonnattan/app
       ports:
         - "8076:8076"
       env_file:
-        - ../file.env
+        - ../file_geo.env
       networks:
         - net
       command: tail -f /home/jonnattan/requirements.txt

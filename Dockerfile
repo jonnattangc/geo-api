@@ -1,31 +1,44 @@
-FROM python:3.14.0a2-alpine3.21
+FROM python:3.13-slim AS builder
 
-LABEL VERSION=2.0
-LABEL DESCRIPCION="Python Geo HTTP V1.0"
+WORKDIR /src
 
+COPY requirements.txt /src/requirements.txt
+
+RUN pip wheel --no-cache-dir --wheel-dir=/src/dist -r requirements.txt
+
+FROM python:3.13.1-slim-bullseye
+
+LABEL VERSION=1.0
+LABEL DESCRIPCION="Python Geo HTTP 1.0"
+
+ENV TZ 'UTC'
 ENV HOST_BD ''
 ENV USER_BD ''
 ENV PASS_BD ''
 
 ENV FLASK_APP app
-ENV FLASK_DEBUG development
+ENV FLASK_DEBUG production
 
-
-RUN adduser -h /home/jonnattan -u 10100 -g 10101 --disabled-password jonnattan
-
-COPY ./requirements.txt /home/jonnattan/requirements.txt
+RUN addgroup --gid 10101 jonnattan && \
+    adduser --home /home/jonnattan --uid 10100 --gid 10101 --disabled-password jonnattan
 
 RUN cd /home/jonnattan && \
     mkdir -p /home/jonnattan/.local/bin && \
     export PATH=$PATH:/home/jonnattan/.local/bin && \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt && \
-    chmod -R 755 /home/jonnattan  && \
+    chmod -R 755 /home/jonnattan && \
     chown -R jonnattan:jonnattan /home/jonnattan
 
-WORKDIR /home/jonnattan/app
+WORKDIR /home/jonnattan
 
 USER jonnattan
+
+COPY . .
+
+COPY --from=builder --chown=10100:10101 --chmod=755 /src/dist /home/jonnattan/dist
+
+RUN pip install --no-cache-dir --no-index --find-links=file:///home/jonnattan/dist -r requirements.txt
+
+WORKDIR /home/jonnattan/app
 
 EXPOSE 8075
 
