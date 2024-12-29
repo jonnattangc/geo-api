@@ -9,7 +9,6 @@ __pycache__/
 .aws_credentials
 # C extensions
 *.so
-
 # Distribution / packaging
 .Python
 build/
@@ -131,3 +130,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# archivos de mapas
+**/**.cpg
+**/**.prj
+**/**.dbf
+**/**.shp
+**/**.shx
