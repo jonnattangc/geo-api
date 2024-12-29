@@ -95,7 +95,7 @@ def unauthorized():
 # ==============================================================================
 # Procesa solicitudes desde pagina web
 # ==============================================================================
-@app.post('/geo/<path:subpath>')
+@app.route('/geo/<path:subpath>', methods=('GET', 'POST'))
 @csrf.exempt
 @auth.login_required
 def process_page( subpath ):

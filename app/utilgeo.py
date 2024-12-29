@@ -43,18 +43,21 @@ class UtilGeo() :
         self.file_name_prov = None
         self.file_name_comn = None
 
-    def get_map(self, zone : str) :
+    """
+    Obtiene el mapa de datos de alguna zona particular 
+    """
+    def get_map(self, zone : str) :        
         if zone == None :
             return None
-        elif zone == 'regs' :
+        elif zone.find('reg') >= 0 :
             if self.map_regs == None :
                 self.map_regs =  gpd.read_file(self.file_name_regs)
             return self.map_regs
-        elif zone == 'prov' :
+        elif zone.find('prov') >= 0 :
             if self.map_prov == None :
                 self.map_prov =  gpd.read_file(self.file_name_prov)
             return self.map_prov
-        elif zone == 'comn' :
+        elif zone.find('com') >= 0 :
             if self.map_comn == None :
                 self.map_comn =  gpd.read_file(self.file_name_comn)
             return self.map_comn
@@ -62,6 +65,21 @@ class UtilGeo() :
             return None    
         return None
 
+    def get_list( self, shape: str ) :
+        elements = []
+        http_code = 404
+        try :
+            maps = self.get_map(shape)
+            if not maps.empty :
+                value = self.get_title_for_shape(shape)
+                for index, mp in maps.iterrows() :
+                    elements.append(str(mp[value]))
+                http_code = 200
+        except Exception as e:
+            print("ERROR get_list:", e)
+            elements = []
+            http_code = 500
+        return elements, http_code
     def get_zones(self, data_rx ) :
         search = None
         place = None
@@ -115,13 +133,13 @@ class UtilGeo() :
         return {'inside': is_equal }
 
     def get_title_for_shape(self, shape: str ) :
-        if shape == 'regs' :
+        if shape.find('reg') >= 0 :
             return 'REGION'
-        elif shape == 'prov' :
+        elif shape.find('prov') >= 0 :
             return 'PROVINCIA'
-        elif shape == 'comn' :
+        elif shape.find('com') >= 0 :
             return 'COMUNA'
-        elif shape == 'country' :
+        elif shape.find('country') >= 0 :
             return 'NAME'
         else :
             return ''
@@ -201,13 +219,30 @@ class UtilGeo() :
             http_code  = 401
             return  response, http_code
         try :
-            request_data = request.get_json()
-            json_data = request_data['data']
-            logging.info("JSON : " + str(json_data) )
-            if subpath == 'search' : 
-                data_response, http_code = self.search_address( json_data )
-            elif subpath == 'inside' :
-                data_response, http_code = self.point_inside( json_data )
+            if request.method == 'POST' :
+                request_data = request.get_json()
+                json_data = request_data['data']
+                logging.info("JSON : " + str(json_data) )
+                if subpath == 'search' : 
+                    data_response, http_code = self.search_address( json_data )
+                elif subpath == 'inside' :
+                    data_response, http_code = self.point_inside( json_data )
+                else :
+                    http_code = 404
+                    message = "Servicio POST /geo/" + subpath + " no encontrado"
+            elif request.method == 'GET' :
+                if subpath == 'regions' :
+                    data_response, http_code = self.get_list( subpath )
+                elif subpath == 'provinces' :
+                    data_response, http_code = self.get_list( subpath )
+                elif subpath == 'communes' :
+                    data_response, http_code = self.get_list( subpath )
+                else :
+                    http_code = 404
+                    message = "Servicio GET /geo/" + subpath + " no encontrado"
+            else: 
+                http_code = 404
+                message = "Servicio no encontrado"
         except Exception as e:
             print("[UtilGeo] Error requestProcess:", e)
 
