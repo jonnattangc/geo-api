@@ -65,15 +65,33 @@ class UtilGeo() :
             return None    
         return None
 
-    def get_list( self, shape: str ) :
+    def region_name(self, id: str) :
+        name = None
+        try :
+            maps = self.get_map( 'regs' )
+            ident, value = self.get_title_for_shape('regs')
+            if not maps.empty :
+                for index, mp in maps.iterrows() :
+                    if str(mp[ident]) == id :
+                        name =  str(mp[value])
+                        break
+        except Exception as e: 
+            print("ERROR region_name:", e)
+        return name
+    def get_list( self, shape: str, region: str ) :
         elements = []
         http_code = 404
         try :
+            logging.info('Busca ' + shape + ' de la region ' + region )
             maps = self.get_map(shape)
             if not maps.empty :
-                value = self.get_title_for_shape(shape)
+                ident, value = self.get_title_for_shape(shape)
                 for index, mp in maps.iterrows() :
-                    elements.append(str(mp[value]))
+                    if region == 'cl' :
+                        elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
+                    else:
+                        if str(mp['CUT_REG']) == region :
+                          elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
                 http_code = 200
         except Exception as e:
             print("ERROR get_list:", e)
@@ -124,7 +142,7 @@ class UtilGeo() :
         is_equal = False
         try :
             if not area.empty :
-                finder = str(area[self.get_title_for_shape(shape)].values[0])
+                _, finder = str(area[self.get_title_for_shape(shape)].values[0])
                 is_equal = search.upper() == finder.upper()
                 # logging.info(search.upper() + ' es igual a ' + finder.upper())
         except Exception as e:
@@ -134,16 +152,16 @@ class UtilGeo() :
 
     def get_title_for_shape(self, shape: str ) :
         if shape.find('reg') >= 0 :
-            return 'REGION'
+            return 'CUT_REG', 'REGION'
         elif shape.find('prov') >= 0 :
-            return 'PROVINCIA'
+            return 'CUT_PROV', 'PROVINCIA'
         elif shape.find('com') >= 0 :
-            return 'COMUNA'
+            return 'CUT_COM', 'COMUNA'
         elif shape.find('country') >= 0 :
-            return 'NAME'
+            return '', 'NAME'
         else :
-            return ''
-        return ''
+            return '', ''
+        return '', ''
     # ==============================================================================
     # Busca si un punto geografico pertenece a un Shape
     # ==============================================================================
@@ -165,37 +183,33 @@ class UtilGeo() :
         code = 409
         data = None
         try :
-            address = str(request_data['address'])
-            address = address.replace('pob', 'población')
-            address = address.replace('depto', 'departamento')
-            address = address.replace('block', 'edificio')
-            address = address.replace('.', ' ')
-            address = address.replace('  ', ' ')
-            address = address.replace(' ', '+')
-            logging.info("Addres: " + address )
-            url = 'https://nominatim.openstreetmap.org/search?q=' + address
-            #url += '&country=Chile'
+            url = 'https://nominatim.openstreetmap.org/search.php?'
+            url += 'street=' + str(request_data['street'])
+            url += '&city=' + str(request_data['city'])
+            url += '&state=' + str(request_data['state'])
+            url += '&country=' + str(request_data['country'])
             url += '&format=jsonv2'
             #url += '&polygon_geojson=1'
             #url += '&addressdetails=1'
-            headers = {'Accept': 'application/json', 'Content-Type': 'application/json' }
-            m1 = time.monotonic_ns()
+            headers = {
+                'Accept': 'application/json', 
+                'user-agent': 'jonnattan/1.0.0'
+            }
             logging.info("URL : " + url )
-            resp = requests.get(url, headers = headers, timeout = 40)
-            diff = time.monotonic_ns() - m1
+            resp = requests.get(url, headers = headers, timeout = 20)
+            logging.info('Http Response: ' + str(resp)  )
             code = resp.status_code
             if( resp.status_code == 200 ) :
                 data_response = resp.json()
                 logging.info("Response: " + str( data_response ) )
-                data = {
-                    'latitude'  : str( data_response[0]['lat'] ),
-                    'longitude' : str( data_response[0]['lon'] ),
-                    'name'      : str( data_response[0]['display_name'] )
-                }  
-                code = 200
+                if len(data_response) > 0 :
+                    data = {
+                        'latitude'  : str( data_response[0]['lat'] ),
+                        'longitude' : str( data_response[0]['lon'] ),
+                        'detail'    : str( data_response[0]['display_name'] )
+                    }  
             else :
-                data_response = resp.json()
-                logging.info("Response: " + str( data_response ) )
+                data = None
         except Exception as e:
             print("ERROR search_address:", e)
         return data, code
@@ -231,12 +245,17 @@ class UtilGeo() :
                     http_code = 404
                     message = "Servicio POST /geo/" + subpath + " no encontrado"
             elif request.method == 'GET' :
-                if subpath == 'regions' :
-                    data_response, http_code = self.get_list( subpath )
-                elif subpath == 'provinces' :
-                    data_response, http_code = self.get_list( subpath )
-                elif subpath == 'communes' :
-                    data_response, http_code = self.get_list( subpath )
+                if subpath.find('regions') >= 0 :
+                    regiones, http_code = self.get_list( 'regions', 'cl' )
+                    data_response = { 'regions': regiones}    
+                elif subpath.find('provinces') >= 0 :
+                    reg = subpath.replace('/provinces','')
+                    provincias, http_code = self.get_list( 'provinces', reg )
+                    data_response = { 'region': self.region_name(reg), 'provinces': provincias}    
+                elif subpath.find('communes') >= 0 :
+                    reg = subpath.replace('/communes','')
+                    comunas, http_code = self.get_list( 'communes', reg )
+                    data_response = { 'region': self.region_name(reg), 'communes': comunas}  
                 else :
                     http_code = 404
                     message = "Servicio GET /geo/" + subpath + " no encontrado"
