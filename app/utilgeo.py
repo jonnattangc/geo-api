@@ -203,10 +203,16 @@ class UtilGeo() :
                 data_response = resp.json()
                 logging.info("Response: " + str( data_response ) )
                 if len(data_response) > 0 :
+                    direction = data_response[0]
+                    for value in data_response :
+                        if value['type'] == 'residential' :
+                            direction = value
+                            break
+                    
                     data = {
-                        'latitude'  : str( data_response[0]['lat'] ),
-                        'longitude' : str( data_response[0]['lon'] ),
-                        'detail'    : str( data_response[0]['display_name'] )
+                        'latitude'  : str( direction['lat'] ),
+                        'longitude' : str( direction['lon'] ),
+                        'detail'    : str( direction['display_name'] )
                     }  
             else :
                 data = None
