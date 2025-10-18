@@ -1,16 +1,17 @@
-version: "3.9"
 services:
-    geo-server:
-      container_name: geo-server
-      image: geoserver:1.0
+    geo-api:
+      container_name: geo-api
+      image: geoapi:prd
+      build: .
       restart: always
       volumes:
         - ./app:/home/jonnattan/app
       ports:
         - "8075:8075"
       env_file:
-        - ../file_geo.env
+        - ../envs/file_geo.env
       networks:
         - db-net
+      # command: tail -f /home/jonnattan/requirements.txt
 networks:
   db-net:

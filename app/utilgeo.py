@@ -212,7 +212,8 @@ class UtilGeo() :
                     data = {
                         'latitude'  : str( direction['lat'] ),
                         'longitude' : str( direction['lon'] ),
-                        'detail'    : str( direction['display_name'] )
+                        'detail'    : str( direction['display_name'] ),
+                        'type'    : str( direction['type'] )
                     }  
             else :
                 data = None
@@ -231,8 +232,8 @@ class UtilGeo() :
         response =  {"message" : message, "data": data_response}
         json_data = None
         logging.info("Reciv " + str(request.method) + " Contex: /geo/" + str(subpath) )
-        #logging.info("Reciv Header :\n" + str(request.headers) )
-        #logging.info("Reciv Data: " + str(request.data) )
+        logging.info("Reciv Header :\n" + str(request.headers) )
+        logging.info("Reciv Data: " + str(request.data) )
         rx_api_key = request.headers.get('x-api-key')
         if rx_api_key == None or str(rx_api_key) != str(self.api_key) :
             response = {"message" : "No autorizado", "data": data_response }
