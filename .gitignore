@@ -132,8 +132,4 @@ dmypy.json
 .pyre/
 
 # archivos de mapas
-**/**.cpg
-**/**.prj
-**/**.dbf
-**/**.shp
-**/**.shx
+**/**/chile

@@ -7,6 +7,7 @@ try:
     import geopandas as gpd
     from geopandas import GeoDataFrame
     from shapely.geometry import Point
+    import json
 
 except ImportError:
     logging.error(ImportError)
@@ -22,6 +23,7 @@ class UtilGeo() :
     file_name_regs : str = None
     file_name_prov : str = None
     file_name_comn : str = None 
+    regions : list = []
     api_key = None
 
     def __init__(self, root = str(ROOT_DIR) ) :
@@ -30,50 +32,70 @@ class UtilGeo() :
             file_path = os.path.join(root, 'static')
             file_path = os.path.join(file_path, 'shapes')
             file_path = os.path.join(file_path, 'chile')
-            self.file_name_regs = file_path + '/REGIONES/REGIONES_v1.shp'
-            self.file_name_prov = file_path + '/PROVINCIAS/PROVINCIAS_v1.shp'
-            self.file_name_comn = file_path + '/COMUNAS/COMUNAS_v1.shp'
+
+            self.file_name_regs = file_path + '/regiones/Regional.shp'
+            self.file_name_prov = file_path + '/provincias/Provincias.shp'
+            self.file_name_comn = file_path + '/comunas/comunas.shp'
+            
+            json_regions_file : str = file_path + '/regiones/regions.json'
+            self.fill_regions( json_regions_file )
         except Exception as e:
             print("[GeoPosUtil] ERROR GEO:", e)
-            self.api_key = None
 
     def __del__(self):
         self.api_key = None
         self.file_name_regs = None
         self.file_name_prov = None
         self.file_name_comn = None
+        self.regions = None
 
+    def fill_regions(self, name_file : str) :
+        try :
+            json_regions : dict = {}
+            with open(name_file) as file:
+                json_regions = json.load(file)
+                file.close()
+            for r in json_regions['regiones'] :
+                self.regions.append(r)
+        except Exception as e:
+            print("ERROR fill_regions:", e)
     """
     Obtiene el mapa de datos de alguna zona particular 
     """
-    def get_map(self, zone : str) :        
+    def get_map(self, zone : str) : 
+        logging.info(f"######## GET: {zone}")       
         if zone == None :
             return None
         elif zone.find('reg') >= 0 :
             if self.map_regs == None :
                 self.map_regs =  gpd.read_file(self.file_name_regs)
+                #logging.info(f"Info Regiones: {self.map_regs.info()}")
             return self.map_regs
         elif zone.find('prov') >= 0 :
             if self.map_prov == None :
                 self.map_prov =  gpd.read_file(self.file_name_prov)
+                #logging.info(f"Info Provincias: {self.map_prov.info()}")
             return self.map_prov
         elif zone.find('com') >= 0 :
             if self.map_comn == None :
                 self.map_comn =  gpd.read_file(self.file_name_comn)
+                #logging.info(f"Info Comunas: {self.map_comn.info()}")
             return self.map_comn
         else :
             return None    
         return None
 
     def region_name(self, id: str) :
-        name = None
+        name : str = None
         try :
             maps = self.get_map( 'regs' )
             ident, value = self.get_title_for_shape('regs')
             if not maps.empty :
                 for index, mp in maps.iterrows() :
+                    #logging.info(str(mp[ident]) + ' es igual a ' + id )
                     if str(mp[ident]) == id :
                         name =  str(mp[value])
+                        logging.info('Name: ' + str(name))
                         break
         except Exception as e: 
             print("ERROR region_name:", e)
@@ -82,17 +104,18 @@ class UtilGeo() :
         elements = []
         http_code = 404
         try :
-            logging.info('Busca ' + shape + ' de la region ' + region )
-            maps = self.get_map(shape)
-            if not maps.empty :
-                ident, value = self.get_title_for_shape(shape)
-                for index, mp in maps.iterrows() :
-                    if region == 'cl' :
-                        elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
-                    else:
-                        if str(mp['CUT_REG']) == region :
-                          elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
-                http_code = 200
+            logging.info('Busca "' + shape + '" de la region "' + region + '"')
+            if shape != None and region != None :
+                maps = self.get_map(shape)
+                if not maps.empty :
+                    ident, value = self.get_title_for_shape(shape)
+                    for index, mp in maps.iterrows() :
+                        if region == 'cl' :
+                            elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
+                        else:
+                            if str(mp['codregion']) == region :
+                                elements.append({'id': str(mp[ident]), 'value': str(mp[value])})
+                    http_code = 200
         except Exception as e:
             print("ERROR get_list:", e)
             elements = []
@@ -152,11 +175,11 @@ class UtilGeo() :
 
     def get_title_for_shape(self, shape: str ) :
         if shape.find('reg') >= 0 :
-            return 'CUT_REG', 'REGION'
+            return 'codregion', 'Region'
         elif shape.find('prov') >= 0 :
-            return 'CUT_PROV', 'PROVINCIA'
+            return 'cod_prov', 'Provincia'
         elif shape.find('com') >= 0 :
-            return 'CUT_COM', 'COMUNA'
+            return 'cod_comuna', 'Comuna'
         elif shape.find('country') >= 0 :
             return '', 'NAME'
         else :
@@ -236,7 +259,8 @@ class UtilGeo() :
         logging.info("Reciv Data: " + str(request.data) )
         rx_api_key = request.headers.get('x-api-key')
         if rx_api_key == None or str(rx_api_key) != str(self.api_key) :
-            response = {"message" : "No autorizado", "data": data_response }
+            logging.info(f"Token No autorizado: {rx_api_key} != {self.api_key}")
+            response = {"message" : "Token No autorizado", "data": data_response }
             http_code  = 401
             return  response, http_code
         try :
