@@ -249,20 +249,19 @@ class UtilGeo() :
     # ==============================================================================
     def request_process(self, request, subpath : str) :
         m1 = time.monotonic()
-        message = "Servicio ejecutado exitosamente"
         http_code  = 200
         data_response = None
-        response =  {"message" : message, "data": data_response}
         json_data = None
+        
         logging.info("Reciv " + str(request.method) + " Contex: /geo/" + str(subpath) )
         logging.info("Reciv Header :\n" + str(request.headers) )
         logging.info("Reciv Data: " + str(request.data) )
+
         rx_api_key = request.headers.get('x-api-key')
         if rx_api_key == None or str(rx_api_key) != str(self.api_key) :
             logging.info(f"Token No autorizado: {rx_api_key} != {self.api_key}")
-            response = {"message" : "Token No autorizado", "data": data_response }
             http_code  = 401
-            return  response, http_code
+            return  data_response, http_code
         try :
             if request.method == 'POST' :
                 request_data = request.get_json()
@@ -274,7 +273,6 @@ class UtilGeo() :
                     data_response, http_code = self.point_inside( json_data )
                 else :
                     http_code = 404
-                    message = "Servicio POST /geo/" + subpath + " no encontrado"
             elif request.method == 'GET' :
                 if subpath.find('regions') >= 0 :
                     regiones, http_code = self.get_list( 'regions', 'cl' )
@@ -289,14 +287,9 @@ class UtilGeo() :
                     data_response = { 'region': self.region_name(reg), 'communes': comunas}  
                 else :
                     http_code = 404
-                    message = "Servicio GET /geo/" + subpath + " no encontrado"
             else: 
                 http_code = 404
-                message = "Servicio no encontrado"
         except Exception as e:
             print("[UtilGeo] Error requestProcess:", e)
-
         logging.info("[UtilGeo] Servicio Ejecutado en " + str(time.monotonic() - m1) + " msec." )
-        response = {"message" : message, "data": data_response }
-
-        return response, http_code 
+        return data_response, http_code 
