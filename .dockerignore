@@ -1,7 +1,3 @@
-docker-compose*
-Dockerfile*
-LICENSE
-README
-.git*
-.docker*
-__PY*
+**
+!requirements.txt
+!app/
