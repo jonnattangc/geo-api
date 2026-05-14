@@ -133,3 +133,5 @@ dmypy.json
 
 # archivos de mapas
 **/**/chile
+
+AGENTS.md

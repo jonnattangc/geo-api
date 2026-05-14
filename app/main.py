@@ -3,14 +3,12 @@
 try:
     import logging
     import sys
-    import os
-    from flask import Flask, request, jsonify
-    from utilgeo import UtilGeo
-
+    from flask import Flask, jsonify
+    from controllers.geo_controller import geo_bp
 except ImportError:
     logging.error(ImportError)
-    print((os.linesep * 2).join(['[http-server] Error al buscar los modulos:',
-                                 str(sys.exc_info()[1]), 'Debes Instalarlos para continuar', 'Deteniendo...']))
+    print((sys.linesep * 2).join(['[http-server] Error al buscar los modulos:',
+                                  str(sys.exc_info()[1]), 'Debes Instalarlos para continuar', 'Deteniendo...']))
     sys.exit(-2)
 
 ############################# Configuraci'on de Registro de Log  ################################
@@ -28,8 +26,8 @@ logger = logging.getLogger('HTTP')
 # ===============================================================================
 
 app = Flask(__name__)
-app.config['DEBUG'] = False 
-app.config.update( DEBUG=False)
+app.config['DEBUG'] = False
+app.config.update(DEBUG=False)
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -39,29 +37,20 @@ def page_not_found(e):
 def method_not_allowed(e):
     return jsonify({"status": "NOK", "message": "Servicio no implementado o no encontrado"}), 405
 
-
-# ==============================================================================
-# Procesa solicitudes desde pagina web
-# ==============================================================================
-@app.route('/geo/<path:subpath>', methods=('GET', 'POST'))
-def process_page( subpath ):
-    geo = UtilGeo()
-    data_response, http_status = geo.request_process( request, str(subpath) )
-    del geo
-    return jsonify(data_response), http_status
+app.register_blueprint(geo_bp, url_prefix='/geo')
 
 # ===============================================================================
 # Metodo Principal que levanta el servidor
 # ===============================================================================
 if __name__ == "__main__":
     listenPort = 8085
-    if(len(sys.argv) == 1):
+    if len(sys.argv) == 1:
         logger.error("Se requiere el puerto como parametro")
         exit(0)
     try:
         logger.info("Server listen at: " + sys.argv[1])
         listenPort = int(sys.argv[1])
-        app.run( host='0.0.0.0', port=listenPort)
+        app.run(host='0.0.0.0', port=listenPort)
     except Exception as e:
         print("ERROR MAIN:", e)
 
