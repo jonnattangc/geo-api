@@ -1,53 +1,64 @@
-FROM python:3.13-slim AS builder
+# Multi-stage build: compila dependencias en una etapa separada para reducir la imagen final.
+FROM python:3.13-slim-bookworm AS builder
 
-WORKDIR /src
+WORKDIR /build
 
-COPY requirements.txt /src/requirements.txt
+# Dependencias de build necesarias para compilar extensiones nativas de geopandas/pyogrio.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libgdal-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip wheel --no-cache-dir --wheel-dir=/src/dist -r requirements.txt
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --wheel-dir=/build/wheels -r requirements.txt
 
-FROM python:3.13-slim
+# ------------------------------------------------------------------------------
+FROM python:3.13-slim-bookworm
 
-LABEL MAINTAINER="Jonnattan Griffiths"
-LABEL VERSION=1.0
-LABEL DESCRIPCION="Python Geo HTTP 1.0"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    TZ=UTC \
+    PORT=8075 \
+    APP_USER=geoapi
 
-ENV TZ 'UTC'
-ENV HOST_BD ''
-ENV USER_BD ''
-ENV PASS_BD ''
+# Runtime libraries para GDAL/PROJ (usadas por geopandas/pyogrio).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgdal32 \
+    libproj25 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV FLASK_APP app
-ENV FLASK_DEBUG production
-ENV PATH="/home/jonnattan/.local/bin:${PATH}"
-ENV PYTHONPATH="/home/jonnattan/.local/lib/python3.13/site-packages"
+# Usuario no-root para ejecutar la aplicacion.
+RUN groupadd --gid 10101 ${APP_USER} && \
+    useradd --home-dir /home/${APP_USER} --uid 10100 --gid 10101 \
+    --create-home --shell /bin/bash ${APP_USER}
 
-RUN addgroup --gid 10101 jonnattan && \
-    adduser --home /home/jonnattan --uid 10100 --gid 10101 --disabled-password jonnattan && \
-    echo "jonnattan:jonnattan" | chpasswd
+WORKDIR /home/${APP_USER}/app
 
-RUN cd /home/jonnattan && \
-    mkdir -p /home/jonnattan/.local/bin && \
-    export PATH=$PATH:/home/jonnattan/.local/bin && \
-    chmod -R 755 /home/jonnattan && \
-    chown -R jonnattan:jonnattan /home/jonnattan
-
-WORKDIR /home/jonnattan
-
-COPY --from=builder --chown=10100:10101 --chmod=755 /src/dist /home/jonnattan/dist
-
+# Copia e instala las wheels generadas en la etapa de build.
+COPY --from=builder --chown=10100:10101 /build/wheels /tmp/wheels
 COPY --chown=10100:10101 requirements.txt .
+RUN pip install --no-cache-dir --no-index --find-links=/tmp/wheels -r requirements.txt && \
+    rm -rf /tmp/wheels
 
-USER jonnattan
+# Copia el codigo fuente.
+COPY --chown=10100:10101 ./app .
 
-RUN pip install --no-cache-dir --no-index --find-links=file:///home/jonnattan/dist -r requirements.txt
+USER ${APP_USER}
 
-WORKDIR /home/jonnattan/app
+EXPOSE ${PORT}
 
-COPY --chown=10100:10101 ./app . 
+# Gunicorn es un WSGI server productivo adecuado para clusters.
+# - workers/threads se pueden sobreescribir con variables de entorno si se desea.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -fs http://localhost:${PORT}/health || exit 1
 
-EXPOSE 8075
-
-CMD [ "python", "main.py", "8075"]
-
-# pip freeze > requirements.txt
+CMD exec gunicorn \
+    --bind 0.0.0.0:${PORT} \
+    --workers ${GUNICORN_WORKERS:-2} \
+    --threads ${GUNICORN_THREADS:-4} \
+    --timeout ${GUNICORN_TIMEOUT:-60} \
+    --access-logfile - \
+    --error-logfile - \
+    main:app

@@ -1,28 +1,34 @@
 import logging
+import os
 import requests
+from urllib.parse import urlencode
 
 
 class NominatimService:
+    BASE_URL = os.environ.get('NOMINATIM_URL', 'https://nominatim.openstreetmap.org/search.php')
+    TIMEOUT = int(os.environ.get('NOMINATIM_TIMEOUT', '20'))
+    USER_AGENT = os.environ.get('NOMINATIM_USER_AGENT', 'geo-api/1.0.0')
+
     @staticmethod
     def search_address(request_data: dict):
         code = 409
         data = None
         try:
-            url = (
-                f"https://nominatim.openstreetmap.org/search.php?"
-                f"street={request_data['street']}"
-                f"&city={request_data['city']}"
-                f"&state={request_data['state']}"
-                f"&country={request_data['country']}"
-                f"&format=jsonv2"
-            )
+            params = {
+                'street': request_data.get('street', ''),
+                'city': request_data.get('city', ''),
+                'state': request_data.get('state', ''),
+                'country': request_data.get('country', ''),
+                'format': 'jsonv2'
+            }
+            url = f"{NominatimService.BASE_URL}?{urlencode(params)}"
             headers = {
                 'Accept': 'application/json',
-                'user-agent': 'jonnattan/1.0.0'
+                'User-Agent': NominatimService.USER_AGENT
             }
             logging.info(f"URL: {url}")
-            resp = requests.get(url, headers=headers, timeout=20)
-            logging.info(f"Http Response: {resp}")
+            resp = requests.get(url, headers=headers, timeout=NominatimService.TIMEOUT)
+            logging.info(f"Http Response: {resp.status_code}")
             code = resp.status_code
             if resp.status_code == 200:
                 data_response = resp.json()
@@ -38,8 +44,9 @@ class NominatimService:
                         'detail': str(direction['display_name']),
                         'type': str(direction['type'])
                     }
-            else:
-                data = None
+        except requests.exceptions.Timeout:
+            logging.error("ERROR search_address: timeout contacting Nominatim")
+            code = 504
         except Exception as e:
             logging.error(f"ERROR search_address: {e}")
         return data, code
