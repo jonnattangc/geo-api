@@ -1,17 +1,26 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
+import logging
+import os
+import sys
 
 try:
-    import logging
-    import sys
     from flask import Flask, jsonify
     from controllers.geo_controller import geo_bp
 except ImportError:
-    logging.error(ImportError)
-    print((sys.linesep * 2).join(['[http-server] Error al buscar los modulos:',
-                                  str(sys.exc_info()[1]), 'Debes Instalarlos para continuar', 'Deteniendo...']))
+    logging.exception("[geo-api] Error al importar modulos requeridos")
+    print(
+        (sys.linesep * 2).join([
+            '[http-server] Error al buscar los modulos:',
+            str(sys.exc_info()[1]),
+            'Debes instalarlos para continuar',
+            'Deteniendo...'
+        ])
+    )
     sys.exit(-2)
 
-############################# Configuraci'on de Registro de Log  ################################
+# =============================================================================
+# Configuracion de logging
+# =============================================================================
 FORMAT = '%(asctime)s %(levelname)s : %(message)s'
 root = logging.getLogger()
 root.setLevel(logging.INFO)
@@ -19,39 +28,53 @@ formatter = logging.Formatter(FORMAT)
 handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.INFO)
 handler.setFormatter(formatter)
-root.addHandler(handler)
+if not root.handlers:
+    root.addHandler(handler)
 logger = logging.getLogger('HTTP')
-# ===============================================================================
-# Configuraciones generales del servidor Web
-# ===============================================================================
 
+# =============================================================================
+# Aplicacion Flask
+# =============================================================================
 app = Flask(__name__)
 app.config['DEBUG'] = False
-app.config.update(DEBUG=False)
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Endpoint de health check para Kubernetes / Docker / load balancers."""
+    return jsonify({"status": "OK", "service": "geo-api"}), 200
+
 
 @app.errorhandler(404)
-def page_not_found(e):
+def page_not_found(_e):
     return jsonify({"status": "NOK", "message": "Servicio no implementado o no encontrado"}), 404
 
+
 @app.errorhandler(405)
-def method_not_allowed(e):
-    return jsonify({"status": "NOK", "message": "Servicio no implementado o no encontrado"}), 405
+def method_not_allowed(_e):
+    return jsonify({"status": "NOK", "message": "Metodo no permitido"}), 405
+
+
+@app.errorhandler(500)
+def internal_error(_e):
+    return jsonify({"status": "NOK", "message": "Error interno del servidor"}), 500
+
 
 app.register_blueprint(geo_bp, url_prefix='/geo')
 
-# ===============================================================================
-# Metodo Principal que levanta el servidor
-# ===============================================================================
+# =============================================================================
+# Punto de entrada para desarrollo local (no usado por Gunicorn)
+# =============================================================================
 if __name__ == "__main__":
-    listenPort = 8085
-    if len(sys.argv) == 1:
-        logger.error("Se requiere el puerto como parametro")
-        exit(0)
+    port = os.environ.get('PORT', '8075')
+    if len(sys.argv) > 1:
+        port = sys.argv[1]
     try:
-        logger.info("Server listen at: " + sys.argv[1])
-        listenPort = int(sys.argv[1])
-        app.run(host='0.0.0.0', port=listenPort)
+        listen_port = int(port)
+        logger.info(f"Server listen at: {listen_port}")
+        app.run(host='0.0.0.0', port=listen_port)
     except Exception as e:
-        print("ERROR MAIN:", e)
+        logger.error(f"ERROR MAIN: {e}")
+        sys.exit(1)
 
-    logging.info("PROGRAM FINISH")
+    logger.info("PROGRAM FINISH")

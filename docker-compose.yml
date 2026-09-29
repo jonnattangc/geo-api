@@ -1,17 +1,32 @@
 services:
-    geo-api:
-      container_name: geo-api
-      image: jonnattangc/geoservice:1.0.0
-      #build: .
-      restart: none
-      #volumes:
-      #  - ./app:/home/jonnattan/app
-      ports:
-        - "8075:8075"
-      env_file:
-        - ../envs/geo.env
-      networks:
-        - db-net
-      #command: tail -f /home/jonnattan/requirements.txt
+  geo-api:
+    container_name: geo-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: geoapi:local
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8075}:${PORT:-8075}"
+    environment:
+      - PORT=${PORT:-8075}
+      - GEO_API_KEY=${GEO_API_KEY:?GEO_API_KEY is required}
+      # Opcional: carga shapes desde S3 en vez de disco local.
+      # - USE_AWS_SHAPES=true
+      # - AWS_S3_BUCKET=mi-bucket
+      # - AWS_S3_PREFIX=shapes/chile
+      # - AWS_ACCESS_KEY_ID=...
+      # - AWS_SECRET_ACCESS_KEY=...
+      # - AWS_DEFAULT_REGION=us-east-1
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:${PORT:-8075}/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    networks:
+      - geo-net
+
 networks:
-  db-net:
+  geo-net:
+    driver: bridge
